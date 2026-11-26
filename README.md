@@ -1,333 +1,166 @@
-# LEG-SLAM
+# LEG-SLAM: Language-Enhanced Gaussian Splatting for Real-Time SLAM
 
-LEG-SLAM is a real-time RGB-D SLAM system that reconstructs a Gaussian scene while storing semantic visual features for later semantic querying and evaluation.
+**Online RGB-D SLAM · Photorealistic mapping · Open-vocabulary 3D scene understanding**
 
-This README describes installation and usage.
+This repository provides the implementation of LEG-SLAM and the evaluation tools for its geometric and semantic reconstruction results on Replica and ScanNet.
 
----
+## Abstract
 
-## 1. Installation
+Gaussian Splatting enables efficient photorealistic reconstruction, but integrating language-aligned semantic representations into online SLAM remains challenging due to the computational cost of dense feature extraction and mapping. We present LEG-SLAM, an online RGB-D SLAM system that jointly reconstructs the geometry, appearance, and semantic representation of a scene. Our approach integrates efficient Gaussian mapping with C-RADIOv4 visual features and principal component analysis (PCA) to compactly encode high-dimensional features in the 3D map. For open-vocabulary semantic segmentation, we combine the language alignment of SigLIP2 with an indoor closed-set segmentation branch, leveraging complementary semantic information to improve predictions while retaining a flexible text-query interface. The system constructs its language-enhanced map directly from incoming RGB-D observations without requiring precomputed camera trajectories or semantic maps. We evaluate LEG-SLAM on Replica and ScanNet in terms of reconstruction and semantic segmentation quality.
 
-LEG-SLAM is intended to be run inside the provided Docker environment.  
-The current build targets Blackwell (CUDA 12.8, SM 120). Other GPU targets require separate validation.
+## Installation
 
-### 1.1 Clone the repository
-
-```bash
-git clone https://github.com/Titrom025/legs-slam.git
-cd legs-slam
-```
-
-### 1.2 Build the Docker image
-
-From the repository root:
+The provided Docker environment requires a Linux host, Docker Compose, NVIDIA Container Toolkit, and a compatible NVIDIA driver. The complete pipeline has been tested on an NVIDIA RTX 5060 Ti using CUDA 12.8 and PyTorch/LibTorch 2.7.1. Other GPU architectures can be configured through the Docker build arguments but have not been validated with this release.
 
 ```bash
-docker compose -f docker-compose.blackwell.yml build
+git clone https://github.com/zaid-nasser/LEG-SLAM.git
+cd LEG-SLAM
+mkdir -p data results encoder_models
+docker compose build
+docker compose up -d --no-build
+docker compose exec legs-slam-api bash
 ```
 
-The first build may take some time because the image contains the dependencies required by LEG-SLAM, ORB-SLAM3, Gaussian Splatting, and the semantic evaluation pipeline.
+The first build compiles the required C++ and CUDA dependencies. Subsequent commands are run inside the container from `/workspace`.
 
-### 1.3 Start the container
+## Model weights
 
-Start the Docker services:
+Download the project-specific model files from the [LEG-SLAM model release](https://github.com/zaid-nasser/LEG-SLAM/releases/tag/v1.0.0) and place them in `encoder_models/` at the repository root.
+
+| Model | Description |
+| --- | --- |
+| [`radio_v4_backbone.pt`](https://github.com/zaid-nasser/LEG-SLAM/releases/download/v1.0.0/radio_v4_backbone.pt) | C-RADIOv4-SO400M visual encoder exported to TorchScript for online SLAM |
+| [`radiov4_pca.pt`](https://github.com/zaid-nasser/LEG-SLAM/releases/download/v1.0.0/radiov4_pca.pt) | PCA compressor (1152 to 128 dimensions) |
+| [`radio_indoor37_linear_probe.pt`](https://github.com/zaid-nasser/LEG-SLAM/releases/download/v1.0.0/radio_indoor37_linear_probe.pt) | Indoor37 linear segmentation probe |
+| [`radio_indoor37_prototypes.pt`](https://github.com/zaid-nasser/LEG-SLAM/releases/download/v1.0.0/radio_indoor37_prototypes.pt) | Semantic prototypes for dual-branch inference |
+
+The first two files are required for SLAM. The other two are required for dual-branch semantic evaluation. These exports are specific to LEG-SLAM and should not be replaced with the original RADIO checkpoint.
+
+For semantic evaluation, prefetch the public [C-RADIOv4](https://huggingface.co/nvidia/C-RADIOv4-SO400M) and [SigLIP2](https://huggingface.co/google/siglip2-giant-opt-patch16-384) weights once:
 
 ```bash
-docker compose -f docker-compose.blackwell.yml up -d
+python -m tools.download_public_models
 ```
 
-Open a shell inside the LEG-SLAM service:
+The model caches persist across container restarts. The RADIO source is retrieved through Torch Hub on first use; for subsequent offline evaluation, retain that source cache along with the model weights.
 
-```bash
-docker compose -f docker-compose.blackwell.yml exec legs-slam-api bash
-```
+## Running LEG-SLAM
 
-All commands in the rest of this README are intended to be run **inside the Docker container**.
+Place the datasets under `data/` on the host. For [Replica](https://github.com/facebookresearch/Replica-Dataset), each scene should contain a `results/` directory with paired `frame*.jpg` and `depth*.png` images, and `semantic_ids/` for semantic evaluation. For [ScanNet](https://github.com/ScanNet/ScanNet), use extracted RGB-D scenes with `color/` and `depth/` directories and filtered 2D semantic labels.
 
-```bash
-cd /workspace
-```
-
-### 1.4 Verify the installation
-
-```bash
-python -m tools.slam.run --help
-python -m eval --help
-python -m eval semantic --help
-python -m eval reconstruction --help
-```
-
----
-
-## 2. Dataset layout
-
-All dataset paths shown below are paths **inside the Docker container**.
-
-### 2.1 Replica
-
-Expected root:
-
-```text
-/workspace/data/Replica/
-```
-
-Typical scene layout:
-
-```text
-/workspace/data/Replica/office0/
-    results/
-        frame000000.jpg
-        depth000000.png
-        ...
-    semantic_ids/
-        semantic_id000000.png
-        ...
-```
-
-Standard Replica scenes:
-
-```text
-office0 office1 office2 office3 office4 room0 room1 room2
-```
-
-### 2.2 ScanNet
-
-Expected root:
-
-```text
-/workspace/data/scannet/
-```
-
-Example:
-
-```text
-/workspace/data/scannet/scene0378_01/
-```
-
-Semantic evaluation also uses:
-
-```text
-eval/scannetv2-labels.modified.tsv
-```
-
-Current ScanNet evaluation scenes:
-
-```text
-scene0011_00
-scene0011_01
-scene0050_00
-scene0050_01
-scene0050_02
-scene0231_00
-scene0231_01
-scene0231_02
-scene0378_00
-scene0378_01
-scene0378_02
-scene0518_00
-```
-
----
-
-## 3. Running LEG-SLAM
-
-The unified reconstruction entry point is:
-
-```bash
-python -m tools.slam.run
-```
-
-A run requires:
-
-- dataset type
-- sequence path
-- output path
-- ORB-SLAM3 configuration
-- feature model registry (defaults to `cfg/feature_models.json`)
-- Gaussian mapper configuration
-- feature model ID
-
-### 3.1 ScanNet example
-
-```bash
-python -m tools.slam.run \
-    --dataset scannet \
-    --sequence /workspace/data/scannet/scene0378_01 \
-    --output /workspace/results/results_scannet_radiov4_128/scene0378_01 \
-    --orb-config cfg/ORB_SLAM3/RGB-D/ScanNet/scene0378_01.yaml \
-    --feature-registry cfg/feature_models.json \
-    --gaussian-config cfg/gaussian_mapper/RGB-D/ScanNet/scannet.yaml \
-    --feature-model radio_v4_so400m
-```
-
-### 3.2 Replica example
+### Replica
 
 ```bash
 python -m tools.slam.run \
     --dataset replica \
-    --sequence /workspace/data/Replica/office0 \
-    --output /workspace/results/results_replica_radiov4_128/office0 \
+    --sequence data/Replica/office0 \
+    --output results/replica/office0 \
     --orb-config cfg/ORB_SLAM3/RGB-D/Replica/office0.yaml \
-    --feature-registry cfg/feature_models.json \
-    --gaussian-config cfg/gaussian_mapper/RGB-D/Replica/replica_rgbd.yaml \
-    --feature-model radio_v4_so400m
+    --gaussian-config cfg/gaussian_mapper/RGB-D/Replica/replica_rgbd.yaml
 ```
 
----
-
-## 4. Reconstruction output
-
-A completed reconstruction is expected to contain:
-
-```text
-<recon-root>/<scene>/
-    experiment/
-        ply/
-            cameras.json
-            point_cloud/
-                point_cloud.ply
-```
-
-These files are consumed by the evaluation tools.
-
----
-
-## 5. Semantic evaluation
-
-Run semantic evaluation with:
+### ScanNet
 
 ```bash
-python -m eval semantic
+python -m tools.slam.run \
+    --dataset scannet \
+    --sequence data/scannet/scene0378_01 \
+    --output results/scannet/scene0378_01 \
+    --orb-config cfg/ORB_SLAM3/RGB-D/ScanNet/scene0378_01.yaml \
+    --gaussian-config cfg/gaussian_mapper/RGB-D/ScanNet/scannet.yaml
 ```
 
-Add:
+Both commands use the default RADIO model and feature registry (`cfg/feature_models.json`). Add `--viewer` to enable the interactive viewer when a graphical display is available. The reconstructed scene and camera parameters are saved in the output directory.
+
+## Evaluation
+
+Run SLAM for the scenes to be evaluated first. The `--recon-root` argument must point to the parent directory containing their reconstruction outputs.
+
+### Semantic segmentation
+
+The following examples evaluate the dual-branch method, combining open-vocabulary language alignment with Indoor37 semantic support. Add `--save-masks` to save predictions and ground-truth visualizations.
+
+**Replica (51 classes)**
 
 ```bash
---save-masks
+python -m eval semantic \
+    --protocol replica51 \
+    --scenes office0 \
+    --data-root data/Replica \
+    --recon-root results/replica \
+    --feature-model radio_v4_so400m \
+    --radio-inference dual \
+    --probe-checkpoint encoder_models/radio_indoor37_linear_probe.pt \
+    --prototype-file encoder_models/radio_indoor37_prototypes.pt \
+    --out-root results/evaluation/replica/semantic
 ```
 
-to save qualitative prediction and ground-truth masks.
-
-Typical output:
-
-```text
-<out-root>/<scene>/
-    pred_ids/
-    pred_vis/
-    gt_ids/
-    gt_vis/
-    classes.json
-    confusion.npy
-    metrics.json
-```
-
-### 5.1 ScanNet semantic evaluation
+**ScanNet (20 classes)**
 
 ```bash
 python -m eval semantic \
     --protocol scannet12_20 \
-    --scenes scene0011_00 scene0011_01 scene0050_00 scene0050_01 scene0050_02 scene0231_00 scene0231_01 scene0231_02 scene0378_00 scene0378_01 scene0378_02 scene0518_00 \
-    --data-root /workspace/data/scannet \
-    --recon-root /workspace/results/results_scannet_radiov4 \
+    --scenes scene0378_01 \
+    --data-root data/scannet \
+    --recon-root results/scannet \
     --feature-model radio_v4_so400m \
-    --feature-registry cfg/feature_models.json \
     --scannet-label-file eval/scannetv2-labels.modified.tsv \
-    --out-root /workspace/results/results_scannet_radiov4/semantic_eval_results/all_scenes \
-    --save-masks
+    --radio-inference dual \
+    --probe-checkpoint encoder_models/radio_indoor37_linear_probe.pt \
+    --prototype-file encoder_models/radio_indoor37_prototypes.pt \
+    --out-root results/evaluation/scannet/semantic
 ```
 
-### 5.2 Replica-51 with RADIO
+For the open-vocabulary-only baseline, use `--radio-inference open_vocab` and omit the probe and prototype arguments. For the depth-affinity refinement experiment, append the following arguments and use a separate output directory:
 
-```bash
-python -m eval semantic \
-    --protocol replica51 \
-    --scenes office0 office1 office2 office3 office4 room0 room1 room2 \
-    --data-root /workspace/data/Replica \
-    --recon-root /workspace/results/results_replica_radiov4 \
-    --feature-model radio_v4_so400m \
-    --feature-registry cfg/feature_models.json \
-    --out-root /workspace/results/results_replica_radiov4/semantic_eval_results/all_scenes \
-    --save-masks
+```text
+--semantic-refinement iterative --affinity-source depth --affinity-dilations 1 2 4
+--refine-iterations 50 --refine-lambda 3.0 --depth-sigma 0.05
 ```
 
-### 5.3 Replica-51 with depth-affinity refinement
+### Reconstruction quality
 
-```bash
-python -m eval semantic \
-    --protocol replica51 \
-    --scenes office0 office1 office2 office3 office4 room0 room1 room2 \
-    --data-root /workspace/data/Replica \
-    --recon-root /workspace/results/results_replica_radiov4 \
-    --feature-model radio_v4_so400m \
-    --feature-registry cfg/feature_models.json \
-    --out-root /workspace/results/results_replica_radiov4/semantic_eval_results/all_scenes_depth_refine \
-    --semantic-refinement iterative \
-    --affinity-source depth \
-    --affinity-dilations 1 2 4 \
-    --refine-iterations 50 \
-    --refine-lambda 3.0 \
-    --depth-sigma 0.05 \
-    --save-masks
-```
-
-### 5.4 Indoor37 closed-set RADIO probe
-
-```bash
-python -m eval semantic \
-    --protocol indoor37_replica \
-    --scenes office0 \
-    --data-root /workspace/data/Replica \
-    --recon-root /workspace/results/results_replica_radiov4 \
-    --feature-model radio_v4_so400m \
-    --feature-registry cfg/feature_models.json \
-    --probe-checkpoint /workspace/encoder_models/radio_indoor37_linear_probe.pt \
-    --out-root /workspace/results/results_replica_radiov4/semantic_eval_results/indoor37_probe_smoke \
-    --frame-stride 100 \
-    --semantic-refinement none \
-    --save-masks
-```
-
----
-
-## 6. Reconstruction evaluation
-
-Run reconstruction evaluation with:
-
-```bash
-python -m eval reconstruction
-```
-
-### 6.1 ScanNet
-
-```bash
-python -m eval reconstruction \
-    --protocol scannet12 \
-    --scenes scene0011_00 scene0011_01 scene0050_00 scene0050_01 scene0050_02 scene0231_00 scene0231_01 scene0231_02 scene0378_00 scene0378_01 scene0378_02 scene0518_00 \
-    --data-root /workspace/data/scannet \
-    --recon-root /workspace/results/results_scannet_radiov4 \
-    --out-root /workspace/results/results_scannet_radiov4/reconstruction_eval_results/all_scenes
-```
-
-### 6.2 Replica smoke test
+**Replica**
 
 ```bash
 python -m eval reconstruction \
     --protocol replica8 \
-    --scenes office1 \
-    --data-root /workspace/data/Replica \
-    --recon-root /workspace/results/results_replica_radiov4_128 \
-    --out-root /workspace/results/results_replica_radiov4_128/reconstruction_eval_results/office1
+    --scenes office0 \
+    --data-root data/Replica \
+    --recon-root results/replica \
+    --out-root results/evaluation/replica/reconstruction
 ```
 
----
-
-## 7. Useful commands
+**ScanNet**
 
 ```bash
-python -m tools.slam.run --help
-python -m eval --help
-python -m eval semantic --help
-python -m eval reconstruction --help
+python -m eval reconstruction \
+    --protocol scannet12 \
+    --scenes scene0378_01 \
+    --data-root data/scannet \
+    --recon-root results/scannet \
+    --out-root results/evaluation/scannet/reconstruction
 ```
 
-For a new configuration, test one scene with a large `--frame-stride` and `--save-masks` before launching the full benchmark.
+### Benchmark scenes
+
+To evaluate the full scene sets, replace the example `--scenes` argument in the commands above with the corresponding list:
+
+- **Replica:** `office0 office1 office2 office3 office4 room0 room1 room2`
+- **ScanNet:** `scene0011_00 scene0011_01 scene0050_00 scene0050_01 scene0050_02 scene0231_00 scene0231_01 scene0231_02 scene0378_00 scene0378_01 scene0378_02 scene0518_00`
+
+Use separate output directories when comparing semantic configurations.
+
+## Acknowledgements
+
+We gratefully acknowledge the authors and contributors of the following projects, which form the foundations of LEG-SLAM:
+
+- [Photo-SLAM](https://github.com/HuajianUP/Photo-SLAM) — real-time Gaussian-based photorealistic mapping.
+- [ORB-SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3) — camera tracking and geometric SLAM.
+- [RADIO](https://github.com/NVlabs/RADIO) — visual foundation models and language-aligned feature representations.
+
+We also acknowledge [SigLIP2](https://huggingface.co/google/siglip2-giant-opt-patch16-384) for vision-language alignment and the creators of Replica and ScanNet for making their datasets available to the research community.
+
+## License
+
+See [LICENSE](LICENSE) and [LICENSE.md](LICENSE.md) for licensing information. Third-party components and pretrained model weights are subject to their respective licenses.
