@@ -1,0 +1,25 @@
+{
+  "models": {
+    "radio_v4_so400m": {
+      "encoder": {
+        "type": "RadioTorchScript",
+        "path": "encoder_models/radio_v4_backbone.pt",
+        "input_width": 0,
+        "input_height": 0,
+        "output_pixels": 0,
+        "embedding_size": 1152,
+        "resolution_step": 16
+      },
+      "text_alignment": {
+        "type": "radio_siglip",
+        "version": "c-radio_v4-so400m",
+        "adaptor": "siglip2-g"
+      },
+      "compressor": {
+        "type": "TorchPCA",
+        "path": "encoder_models/radiov4_pca.pt",
+        "output_dim": 128
+      }
+    }
+  }
+}

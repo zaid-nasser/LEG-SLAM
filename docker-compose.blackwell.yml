@@ -1,0 +1,34 @@
+services:
+  legs-slam-api:
+    image: legs-slam:radio-clean-cu128
+    build:
+      context: .
+      dockerfile: Dockerfile.blackwell
+      args:
+        BUILD_JOBS: "${BUILD_JOBS:-2}"
+    shm_size: '8gb'
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,graphics,display
+      DISPLAY: "${DISPLAY:-}"
+    volumes:
+      - ./data:/workspace/data:ro
+      - ./results:/workspace/results
+      - ./cfg:/workspace/cfg:ro
+      - ./ovs_videos:/workspace/ovs_videos
+      - ./eval:/workspace/eval
+      - ./examples:/workspace/examples
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${HOME}/.cache/legs-slam/torch:/root/.cache/torch
+      - ${HOME}/.cache/legs-slam/huggingface:/root/.cache/huggingface
+    working_dir: /workspace
+    ports:
+      - "8005:8005"
+    command: ["bash", "-lc", "sleep infinity"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
