@@ -164,7 +164,7 @@ python -m eval semantic \
     --out-root results/evaluation/scannet/semantic
 ```
 
-For the open-vocabulary-only baseline, use `--radio-inference open_vocab` and omit the probe and prototype arguments.
+For the open-vocabulary-only baseline, use `--radio-inference open_vocab`.
 
 ### Reconstruction quality
 
@@ -194,21 +194,6 @@ python -m eval reconstruction \
 
 - **Replica:** `office0 office1 office2 office3 office4 room0 room1 room2`
 - **ScanNet:** `scene0011_00 scene0011_01 scene0050_00 scene0050_01 scene0050_02 scene0231_00 scene0231_01 scene0231_02 scene0378_00 scene0378_01 scene0378_02 scene0518_00`
-
----
-
-## Repository structure
-
-```text
-LEG-SLAM/
-├── cfg/                 # ORB-SLAM3 and Gaussian mapper configs
-├── data/                # Datasets (Replica / ScanNet)
-├── encoder_models/      # Released model weights
-├── eval/                # Evaluation scripts and utilities
-├── results/             # Reconstruction and evaluation outputs
-├── tools/               # Training, download, and SLAM entrypoints
-└── docker-compose.yml   # Container entrypoint
-```
 
 ---
 
