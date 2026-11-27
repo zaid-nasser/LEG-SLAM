@@ -72,25 +72,6 @@ Open-vocabulary semantic simultaneous localization and mapping (SLAM) enables la
 </p>
 
 ---
-
-## Benchmark snapshot
-
-| Setting | Result |
-| --- | ---: |
-| Replica semantic segmentation | **37.6% mIoU** |
-| ScanNet semantic segmentation | **55.4% mIoU** |
-| Runtime on Replica | **13.03 FPS** |
-| Fusion ablation (4 Replica scenes) | **25.91% → 35.25% mIoU** |
-
-### Ablation plots
-
-<p align="center">
-  <img src="assets/readme/legslam_pca_ablation.png" alt="PCA ablation" width="48%">
-  <img src="assets/readme/legslam_fusion_ablation.png" alt="Fusion ablation" width="48%">
-</p>
-
----
-
 ## Installation
 
 The pipeline was tested on an NVIDIA RTX 5060 Ti with CUDA 12.8 and PyTorch 2.7.1. Other GPU architectures can be configured through Docker build arguments
