@@ -752,3 +752,6 @@ semantic_eval_results/
 encoder_models/radio_v4_backbone.pt
 run_scannet_all.sh
 instructions.txt
+
+# Allow README visualization images
+!assets/readme/*.png
