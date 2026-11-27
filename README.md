@@ -6,7 +6,18 @@ This repository provides the implementation of LEG-SLAM and the evaluation tools
 
 ## Abstract
 
-Gaussian Splatting enables efficient photorealistic reconstruction, but integrating language-aligned semantic representations into online SLAM remains challenging due to the computational cost of dense feature extraction and mapping. We present LEG-SLAM, an online RGB-D SLAM system that jointly reconstructs the geometry, appearance, and semantic representation of a scene. Our approach integrates efficient Gaussian mapping with C-RADIOv4 visual features and principal component analysis (PCA) to compactly encode high-dimensional features in the 3D map. For open-vocabulary semantic segmentation, we combine the language alignment of SigLIP2 with an indoor closed-set segmentation branch, leveraging complementary semantic information to improve predictions while retaining a flexible text-query interface. The system constructs its language-enhanced map directly from incoming RGB-D observations without requiring precomputed camera trajectories or semantic maps. We evaluate LEG-SLAM on Replica and ScanNet in terms of reconstruction and semantic segmentation quality.
+Open-vocabulary semantic simultaneous localization and mapping (SLAM)
+enables language-guided scene understanding, but integrating high-dimensional
+visual features into real-time mapping while maintaining accurate semantic seg-
+mentation remains challenging. We present LEG-SLAM, a real-time RGB-D
+D SLAM system that constructs photorealistic 3D Gaussian maps enriched
+with RADIO-v4 visual features compressed using principal component analysis (PCA). To improve semantic segmentation, we propose a dual-branch
+approach that combines language-aligned features with an indoor-specific semantic classifier through reliability- and query-aware fusion. This allows the system to exploit specialized semantic knowledge while preserving open-vocabulary
+flexibility. LEG-SLAM achieves mean intersection over union (mIoU) scores
+of 37.6% and 55.4% on Replica and ScanNet, respectively, with a processing
+throughput of 13.03 frames per second on Replica. On four Replica scenes, the
+proposed fusion improves mIoU from 25.91% using open-vocabulary-only infer-
+ence to 35.25%.
 
 ## Installation
 
