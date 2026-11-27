@@ -21,7 +21,7 @@ ence to 35.25%.
 
 ## Installation
 
-The provided Docker environment requires a Linux host, Docker Compose, NVIDIA Container Toolkit, and a compatible NVIDIA driver. The complete pipeline has been tested on an NVIDIA RTX 5060 Ti using CUDA 12.8 and PyTorch/LibTorch 2.7.1. Other GPU architectures can be configured through the Docker build arguments but have not been validated with this release.
+The pipeline was tested on an NVIDIA RTX 5060 Ti with CUDA 12.8 and PyTorch 2.7.1. Other GPU architectures can be configured through Docker build arguments
 
 ```bash
 git clone https://github.com/zaid-nasser/LEG-SLAM.git
@@ -44,16 +44,6 @@ Download the project-specific model files from the [LEG-SLAM model release](http
 | [`radiov4_pca.pt`](https://github.com/zaid-nasser/LEG-SLAM/releases/download/v1.0.0/radiov4_pca.pt) | PCA compressor (1152 to 128 dimensions) |
 | [`radio_indoor37_linear_probe.pt`](https://github.com/zaid-nasser/LEG-SLAM/releases/download/v1.0.0/radio_indoor37_linear_probe.pt) | Indoor37 linear segmentation probe |
 | [`radio_indoor37_prototypes.pt`](https://github.com/zaid-nasser/LEG-SLAM/releases/download/v1.0.0/radio_indoor37_prototypes.pt) | Semantic prototypes for dual-branch inference |
-
-The first two files are required for SLAM. The other two are required for dual-branch semantic evaluation. These exports are specific to LEG-SLAM and should not be replaced with the original RADIO checkpoint.
-
-For semantic evaluation, prefetch the public [C-RADIOv4](https://huggingface.co/nvidia/C-RADIOv4-SO400M) and [SigLIP2](https://huggingface.co/google/siglip2-giant-opt-patch16-384) weights once:
-
-```bash
-python -m tools.download_public_models
-```
-
-The model caches persist across container restarts. The RADIO source is retrieved through Torch Hub on first use; for subsequent offline evaluation, retain that source cache along with the model weights.
 
 ## Running LEG-SLAM
 
@@ -81,7 +71,7 @@ python -m tools.slam.run \
     --gaussian-config cfg/gaussian_mapper/RGB-D/ScanNet/scannet.yaml
 ```
 
-Both commands use the default RADIO model and feature registry (`cfg/feature_models.json`). Add `--viewer` to enable the interactive viewer when a graphical display is available. The reconstructed scene and camera parameters are saved in the output directory.
+ Add `--viewer` to enable the interactive viewer.
 
 ## Evaluation
 
@@ -122,12 +112,7 @@ python -m eval semantic \
     --out-root results/evaluation/scannet/semantic
 ```
 
-For the open-vocabulary-only baseline, use `--radio-inference open_vocab` and omit the probe and prototype arguments. For the depth-affinity refinement experiment, append the following arguments and use a separate output directory:
-
-```text
---semantic-refinement iterative --affinity-source depth --affinity-dilations 1 2 4
---refine-iterations 50 --refine-lambda 3.0 --depth-sigma 0.05
-```
+For the open-vocabulary-only baseline, use `--radio-inference open_vocab` and omit the probe and prototype arguments.
 
 ### Reconstruction quality
 
@@ -152,15 +137,6 @@ python -m eval reconstruction \
     --recon-root results/scannet \
     --out-root results/evaluation/scannet/reconstruction
 ```
-
-### Benchmark scenes
-
-To evaluate the full scene sets, replace the example `--scenes` argument in the commands above with the corresponding list:
-
-- **Replica:** `office0 office1 office2 office3 office4 room0 room1 room2`
-- **ScanNet:** `scene0011_00 scene0011_01 scene0050_00 scene0050_01 scene0050_02 scene0231_00 scene0231_01 scene0231_02 scene0378_00 scene0378_01 scene0378_02 scene0518_00`
-
-Use separate output directories when comparing semantic configurations.
 
 ## Acknowledgements
 
